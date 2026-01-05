@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "algo_prediction"
+version = "0.1.0"
+description = "Algo prediction runner + ADLS writer"
+requires-python = ">=3.10"
+dependencies = [
+  "pandas",
+  "pyarrow",
+  "azure-storage-file-datalake",
+  "python-dateutil",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
