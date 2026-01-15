@@ -1,5 +1,4 @@
 # modeling/postprocess.py
-
 from __future__ import annotations
 
 from typing import List, Optional
@@ -8,8 +7,8 @@ import numpy as np
 import pandas as pd
 
 from algo_prediction.modeling.imputation import ranking_method_like_r
-from algo_prediction.modeling.outliers import detect_outliers_iqr_on_residuals  # ✅ fallback existant
 from algo_prediction.modeling.dju_model import r2_and_adj_r2
+from algo_prediction.modeling.outliers import ts_anomaly_detection_like_r  # ✅ R-like option
 
 
 def build_y_like_r(
@@ -104,7 +103,6 @@ def build_y_like_r(
     if gap_ratio >= 0.2:
         messages.append("note_003: number of MISSING data > 20%, the result is not guaranteed")
 
-    # force float pour éviter FutureWarning dtype
     df["consumption_imputation"] = y_raw.astype(float)
 
     if int(df["is_missing"].sum()) > 0:
@@ -113,7 +111,7 @@ def build_y_like_r(
         miss_mask = df["is_missing"].to_numpy()
         df.loc[df["is_missing"], "consumption_imputation"] = rank_fill[miss_mask]
 
-        # ✅ refit DJU sur imputation et overwrite UNIQUEMENT missing
+        # refit DJU sur imputation et overwrite UNIQUEMENT missing
         fitted_imp = _predict_dju_fitted(df, ycol="consumption_imputation", fit_mask=~df["is_missing"])
         can_replace = df["is_missing"] & fitted_imp.notna()
         df.loc[can_replace, "consumption_imputation"] = fitted_imp.loc[can_replace]
@@ -128,41 +126,44 @@ def build_y_like_r(
         messages.append("note: raw DJU adjR2 > imputed DJU adjR2 -> drop raw NA rows")
 
     # -------------------------
-    # 3) anomalies on imputation -> correction
+    # 3) anomalies on imputation -> correction (R-like)
     # -------------------------
     df = df.sort_values(month_col).copy()
     df["consumption_imputation"] = pd.to_numeric(df["consumption_imputation"], errors="coerce").astype(float)
 
-    factors = _factors(df)
+    # ✅ OUTLIERS (R-like option)
+    # - iterate=1 + enable_pass2=False => stable + évite les "outliers en plus" qui changent tout le modèle
+    res_out = ts_anomaly_detection_like_r(
+        df["consumption_imputation"],
+        period=12,
+        thres=3.0,
+        lowess_frac=0.35,
+        iterate=1,
+        enable_pass2=False,
+    )
 
-    # ✅ IMPORTANT: pas d'import en haut si la fonction n'existe pas
-    out_mask = pd.Series(False, index=df.index)
-    if len(factors) >= 1:
-        try:
-            # si tu l'as dans modeling/outliers.py, on l'utilise
-            from modeling.outliers import detect_outliers_iqr_on_dju_residuals  # type: ignore
-
-            out_mask = detect_outliers_iqr_on_dju_residuals(
-                df=df,
-                y_col="consumption_imputation",
-                x_cols=factors,
-                thres=3.0,
-            )
-        except Exception:
-            # sinon fallback robuste (fonction existante)
-            out_mask = detect_outliers_iqr_on_residuals(df["consumption_imputation"], thres=3.0)
-    else:
-        out_mask = detect_outliers_iqr_on_residuals(df["consumption_imputation"], thres=3.0)
-
-    out_mask = pd.Series(out_mask, index=df.index).fillna(False).astype(bool)
+    out_mask = pd.Series(res_out.outlier_mask, index=df.index).fillna(False).astype(bool)
     df["is_anomaly"] = out_mask
 
-    # init float pour éviter warning dtype
+    # logs détaillés (mois + bornes IQR)
+    if int(out_mask.sum()) > 0:
+        months = df.loc[out_mask, month_col].astype(str).tolist()
+        messages.append(f"note_005: number of ANOMALIES data occured in your data: {int(out_mask.sum())}")
+        messages.append(f"debug_outliers_months: {months}")
+        if isinstance(res_out.debug, dict):
+            low = res_out.debug.get("low")
+            high = res_out.debug.get("high")
+            q1 = res_out.debug.get("q1")
+            q3 = res_out.debug.get("q3")
+            messages.append(f"debug_outliers_iqr: low={low}, high={high}, q1={q1}, q3={q3}")
+    else:
+        # pas d'anomalies => note_005 non ajoutée (comme avant)
+        pass
+
+    # init float
     df["consumption_correction"] = df["consumption_imputation"].astype(float)
 
     if int(out_mask.sum()) > 0:
-        messages.append(f"note_005: number of ANOMALIES data occured in your data: {int(out_mask.sum())}")
-
         base = df["consumption_imputation"].copy()
         base.loc[out_mask] = np.nan
 
@@ -172,13 +173,13 @@ def build_y_like_r(
         # remplace uniquement anomalies par ranking
         df.loc[out_mask, "consumption_correction"] = corr_rank[out_np]
 
-        # ✅ refit DJU sur correction et overwrite UNIQUEMENT anomalies
+        # refit DJU sur correction et overwrite UNIQUEMENT anomalies
         fitted_cor = _predict_dju_fitted(df, ycol="consumption_correction", fit_mask=~df["is_anomaly"])
         can_replace2 = df["is_anomaly"] & fitted_cor.notna()
         df.loc[can_replace2, "consumption_correction"] = fitted_cor.loc[can_replace2]
 
     else:
-        # ✅ règle R : si pas d'anomalies -> correction = raw (pas imputation)
+        # règle R : si pas d'anomalies -> correction = raw (pas imputation)
         df["consumption_correction"] = pd.to_numeric(df[y_raw_col], errors="coerce").astype(float)
 
     # -------------------------

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 
 import pandas as pd
 
@@ -21,12 +21,15 @@ def train_like_r(
     messages: Optional[List[str]] = None,
     influencing_cols: Optional[List[str]] = None,
     usage_cols: Optional[List[str]] = None,
-) -> Dict:
+) -> Dict[str, Any]:
     if messages is None:
         messages = []
 
     influencing_cols = influencing_cols or []
     usage_cols = usage_cols or []
+
+    # ✅ IMPORTANT: toujours initialiser
+    outliers_df = pd.DataFrame()
 
     decision = decide_training_strategy_like_r(
         train=train,
@@ -41,6 +44,7 @@ def train_like_r(
     if status == TrainStatus.NO_REFERENCE_DATA:
         return {
             **decision,
+            "outliers_reference": outliers_df,
             "model_coefficients": None,
             "accuracy_reference_model": None,
             "predictive_consumption": None,
@@ -55,15 +59,15 @@ def train_like_r(
             value_col="value",
             month_col="month_year",
         )
-        return {**decision, **out}
+        return {**decision, **out, "outliers_reference": outliers_df}
 
     # note_annual_ref
     if status == TrainStatus.OK_ANNUAL_REFERENCE:
         # 1) Choisir best_hdd/best_cdd sur le Y brut (value) pour le postprocess
         best_hdd, best_cdd, hdd_scores, cdd_scores = choose_best_hdd_cdd_like_r(
-    train=train,
-    value_col="value",
-)
+            train=train,
+            value_col="value",
+        )
 
         # logs (optionnel mais utile)
         if best_hdd is None and best_cdd is None:
@@ -90,6 +94,38 @@ def train_like_r(
             messages=messages,
         )
 
+        # 2bis) Construire la table outliers (style R)
+        if not processed_train.empty and "is_anomaly" in processed_train.columns:
+            keep = [c for c in [
+                "deliverypoint_id_primaire",
+                "fluid",
+                "start",
+                "end",
+                "value",
+                "is_missing",
+                "consumption_imputation",
+                "is_anomaly",
+                "consumption_correction",
+            ] if c in processed_train.columns]
+
+            outliers_df = processed_train.loc[
+                processed_train["is_anomaly"].fillna(False).astype(bool),
+                keep
+            ].copy()
+
+            outliers_df = outliers_df.rename(columns={
+                "deliverypoint_id_primaire": "invoice.delivery_point",
+                "fluid": "invoice.fluid",
+                "start": "invoice_start_date",
+                "end": "invoice_end_date",
+                "value": "invoice.consumption",
+                "consumption_imputation": "invoice.consumption_imputation",
+                "consumption_correction": "invoice.consumption_correction",
+            })
+        else:
+            # utile pour debug : on sait pourquoi c'est vide
+            messages.append("debug_outliers: no is_anomaly column or processed_train empty -> outliers_reference empty")
+
         # 3) Modèle final DJU + facteurs sur y_final
         out = run_best_dju_model_like_r(
             train=processed_train,
@@ -99,8 +135,8 @@ def train_like_r(
             influencing_cols=influencing_cols,
             usage_cols=usage_cols,
             messages=messages,
-             chosen_hdd=best_hdd,
-    chosen_cdd=best_cdd,
+            chosen_hdd=best_hdd,
+            chosen_cdd=best_cdd,
         )
 
         # 4) fallback mean si DJU inutilisable
@@ -114,12 +150,14 @@ def train_like_r(
                 month_col="month_year",
             )
 
-        return {**decision, **out}
+        # ✅ ICI: on renvoie outliers_reference
+        return {**decision, **out, "outliers_reference": outliers_df}
 
     # fallback sécurité
     messages.append("note: unknown status -> no training performed")
     return {
         **decision,
+        "outliers_reference": outliers_df,
         "model_coefficients": None,
         "accuracy_reference_model": None,
         "predictive_consumption": None,

@@ -71,21 +71,10 @@ def build_model_table_for_pdl_fluid(
     month_year_invoice: List[str],
     messages: Optional[List[str]] = None,
 ) -> pd.DataFrame:
-    """
-    Reproduit la partie R :
-      - retrieve_invoice_fluid_pdl + left_join(DJU) + left_join(influencing factors)
-      - interpolation_missing(linear) sur les facteurs d’usage uniquement
-
-    Table finale = 1 ligne par mois (mois attendus), avec :
-      - identité PDL + fluid toujours présents
-      - start/end toujours présents (bornes de mois), même si pas de facture
-      - value présent seulement si facture existe (sinon NaN)
-      - DJU / usage merged si dispo
-    """
     if messages is None:
         messages = []
 
-    # --- 0) Base : mois attendus + identité + bornes de mois (IMPORTANT)
+    # --- 0) Base mois attendus
     base = pd.DataFrame({"month_year": month_year_invoice})
     base = _ensure_month_year_format(base, "month_year", fmt="%Y-%m")
 
@@ -94,7 +83,7 @@ def build_model_table_for_pdl_fluid(
     base["deliverypoint_id_primaire"] = pdl_id
     base["fluid"] = fluid
 
-    # --- 1) Filtrer invoices pour ce PDL + fluid
+    # --- 1) Filtrer invoices PDL + fluid
     inv = df_invoices_monthly.copy()
     if inv.empty:
         _append_once(messages, f"error_014: ALL INVOICE OF {pdl_id} ARE MISSING (empty invoices input)")
@@ -111,19 +100,50 @@ def build_model_table_for_pdl_fluid(
             _append_once(messages, f"error_014: ALL INVOICE OF {pdl_id} ARE MISSING for fluid={fluid}")
             model = base.copy()
         else:
-            # doublons month_year -> garder dernière facture (stable)
+            # Assurer start/end en datetime
             if "start" in inv_pf.columns:
-                inv_pf = inv_pf.sort_values(["start"])
-            inv_pf = inv_pf.drop_duplicates(subset=["month_year"], keep="last")
+                inv_pf["start"] = pd.to_datetime(inv_pf["start"], errors="coerce")
+            if "end" in inv_pf.columns:
+                inv_pf["end"] = pd.to_datetime(inv_pf["end"], errors="coerce")
 
-            # --- 2) Merge base + invoices (on ne veut pas perdre pdl/fluid)
-            # On merge uniquement les colonnes invoice utiles
-            keep_cols = [c for c in ["month_year", "start", "end", "value"] if c in inv_pf.columns]
-            inv_pf_small = inv_pf[keep_cols].copy()
+            before_rows = len(inv_pf)
+            before_months = inv_pf["month_year"].nunique(dropna=True)
 
-            model = base.merge(inv_pf_small, on="month_year", how="left", suffixes=("", "_inv"))
+            # Debug: mois avec plusieurs lignes (cause fréquente du 45 vs 33)
+            dup_counts = inv_pf["month_year"].value_counts()
+            n_dup_months = int((dup_counts > 1).sum())
+            max_dup = int(dup_counts.max()) if len(dup_counts) else 0
+            if n_dup_months > 0:
+                _append_once(
+                    messages,
+                    f"debug_invoices: {n_dup_months} months have multiple invoice rows (max rows in a month={max_dup})"
+                )
 
-            # si invoice manque, conserver start/end de base
+            # ✅ CORRECTION R-LIKE:
+            # R finit avec 1 ligne par mois (après prorata + agrégation) => on agrège ici par month_year
+            # value = somme, start=min, end=max
+            # (et on ignore les lignes sans value si besoin)
+            inv_pf_agg = (
+                inv_pf.groupby("month_year", as_index=False)
+                .agg(
+                    start=("start", "min"),
+                    end=("end", "max"),
+                    value=("value", "sum"),
+                )
+            )
+
+            after_rows = len(inv_pf_agg)
+            after_months = inv_pf_agg["month_year"].nunique(dropna=True)
+
+            _append_once(
+                messages,
+                f"debug_invoices_agg: rows {before_rows}->{after_rows} ; unique months {before_months}->{after_months}"
+            )
+
+            # --- Merge base + invoices agrégées
+            model = base.merge(inv_pf_agg, on="month_year", how="left", suffixes=("", "_inv"))
+
+            # conserver start/end base si NA côté invoice
             if "start_inv" in model.columns:
                 model["start"] = model["start_inv"].combine_first(model["start"])
                 model.drop(columns=["start_inv"], inplace=True)
@@ -134,7 +154,6 @@ def build_model_table_for_pdl_fluid(
     # --- 3) Merge DJU
     dju = df_dju_monthly.copy()
     if not dju.empty and "month_year" in dju.columns:
-        # get_degreedays_mentuel peut renvoyer month_year en YYYYMM -> convertir
         dju_my = dju["month_year"].astype(str)
         if dju_my.str.match(r"^\d{6}$").any():
             dju = dju.copy()
@@ -148,7 +167,6 @@ def build_model_table_for_pdl_fluid(
     # --- 4) Merge Usage factors
     usage = df_usage_monthly.copy()
     usage_cols: List[str] = []
-
     if not usage.empty and "month_year" in usage.columns:
         usage = _ensure_month_year_format(usage, "month_year", fmt="%Y-%m")
         usage_cols = [c for c in usage.columns if c != "month_year"]
@@ -156,22 +174,20 @@ def build_model_table_for_pdl_fluid(
     else:
         _append_once(messages, "note_012: ALL INFLUENCING FACTOR NOT FOUND OR VALUE of INFLUENCING FACTOR IS CONSTANT")
 
-    # --- 5) Interpolation linéaire sur les colonnes usage uniquement (comme R)
+    # --- 5) Interpolation linéaire sur usage uniquement
     if usage_cols:
         model = model.sort_values("month_year").reset_index(drop=True)
         for col in usage_cols:
             model[col] = interpolation_missing_linear(model[col])
 
-    # --- 6) Nettoyage/tri
     model = model.sort_values("month_year").reset_index(drop=True)
 
-    # colonnes minimales attendues (optionnel)
-    # (si tu veux assurer l’ordre)
-    # base_cols = ["month_year", "start", "end", "value", "deliverypoint_id_primaire", "fluid"]
-    # rest = [c for c in model.columns if c not in base_cols]
-    # model = model[base_cols + rest]
+    n_val = int(model["value"].notna().sum()) if "value" in model.columns else 0
+    _append_once(messages, f"debug_model_table: months_total={len(model)} months_with_value={n_val}")
 
     return model
+
+
 
 
 def split_train_test_like_r(
@@ -193,17 +209,8 @@ def split_train_test_like_r(
     if messages is None:
         messages = []
 
-
-     # ✅ R RULE: prediction must be within ONE calendar year
-    if start_pred.year != end_pred.year:
-        # R message is error_000 but logger prints error_001 -> keep your convention if needed
-        messages.append(
-            "error_000 :  Model can predict only one calendar year. "
-            "Please check start_date_pred and end_date_pred for your request !"
-        )
-        # Stop-like behavior: no test generated
-        empty = model_table.iloc[0:0].copy()
-        return empty.reset_index(drop=True), empty.reset_index(drop=True)
+    if start_pred > end_pred:
+        raise ValueError("start_pred must be <= end_pred")
 
     df = model_table.copy()
     if df.empty:
@@ -213,8 +220,7 @@ def split_train_test_like_r(
     df["start"] = pd.to_datetime(df.get("start"), errors="coerce")
     df["end"] = pd.to_datetime(df.get("end"), errors="coerce")
 
-    # Train : on exige qu'il y ait une valeur réelle (facture)
-    # (en R, train vient de retrieve_invoice_fluid_pdl => toujours invoice.consumption)
+    # Train : on exige une valeur réelle (facture)
     has_value = df["value"].notna()
 
     mask_train = (
@@ -225,13 +231,37 @@ def split_train_test_like_r(
     )
     train = df.loc[mask_train].copy()
 
+    # Log R-like : nombre de mois utilisés pour la référence
+    pdl = df["deliverypoint_id_primaire"].iloc[0] if "deliverypoint_id_primaire" in df.columns and len(df) else "unknown_pdl"
+    fl = df["fluid"].iloc[0] if "fluid" in df.columns and len(df) else "unknown_fluid"
+    _append_once(messages, f"note_annual_ref: {fl} PDL {pdl} was used {len(train)} months for ANNUAL REFERENCE")
+
+    # Debug bornes effectives
+    _append_once(messages, f"debug_ref_bounds: start_ref={start_ref} end_ref={end_ref}")
+
+    if len(train) > 0:
+        min_m = str(train["month_year"].min())
+        max_m = str(train["month_year"].max())
+        _append_once(messages, f"debug_ref_window: train month_year range = {min_m} -> {max_m}")
+
+        # voir si des starts dupliqués (comme le check R sur invoice_start_date)
+        if "start" in train.columns:
+            dup_start = int(train["start"].duplicated().sum())
+            if dup_start > 0:
+                _append_once(messages, f"debug_duplicates: {dup_start} duplicated start dates found in train")
+
     # Test : mois à prédire (qu’il y ait une facture ou non)
     pred_months = set(_month_range_yyyy_mm(start_pred, end_pred))
     test = df[df["month_year"].isin(pred_months)].copy()
 
+    # Logs test
+    _append_once(messages, f"debug_pred_bounds: start_pred={start_pred} end_pred={end_pred} months={len(pred_months)}")
+    if len(test) > 0:
+        _append_once(messages, f"debug_test: months_in_test={len(test)} month_year range={test['month_year'].min()} -> {test['month_year'].max()}")
+    else:
+        _append_once(messages, "note: test is empty for given prediction period")
+
     if train.empty:
         _append_once(messages, "note: train is empty for given reference period (no invoice values inside ref window)")
-    if test.empty:
-        _append_once(messages, "note: test is empty for given prediction period")
 
     return train.reset_index(drop=True), test.reset_index(drop=True)

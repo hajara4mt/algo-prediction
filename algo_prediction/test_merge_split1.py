@@ -32,6 +32,41 @@ def _print_df_head(df: pd.DataFrame, name: str, n: int = 8) -> None:
         return
     print(df.head(n))
 
+def _print_outliers_if_note005(out: Dict[str, Any], messages: List[str], max_rows: int = 200) -> None:
+    """
+    N'ajoute rien aux sorties existantes sauf:
+    - Si note_005 est présente dans messages => on affiche le détail des outliers.
+    """
+    has_note005 = any(m.startswith("note_005") for m in messages)
+    if not has_note005:
+        return
+
+    outliers_df = out.get("outliers_reference")
+
+    print("\n--- OUTLIERS DETAILS (triggered by note_005) ---")
+    if outliers_df is None or outliers_df.empty:
+        print("note_005 present but outliers_reference is empty/None -> check training.py return payload")
+        return
+
+    # colonnes attendues proches R (si dispo)
+    cols = [
+        "invoice.delivery_point",
+        "invoice.fluid",
+        "invoice_start_date",
+        "invoice_end_date",
+        "invoice.consumption",
+        "is_missing",
+        "invoice.consumption_imputation",
+        "is_anomaly",
+        "invoice.consumption_correction",
+    ]
+    cols = [c for c in cols if c in outliers_df.columns]
+
+    # Affichage
+    if cols:
+        print(outliers_df[cols].head(max_rows).to_string(index=False))
+    else:
+        print(outliers_df.head(max_rows).to_string(index=False))
 
 def _to_float_or_nan(x: Any) -> float:
     try:
@@ -306,6 +341,8 @@ def run_test_building(
                 influencing_cols=influencing_cols,
                 usage_cols=usage_cols,
             )
+            _print_outliers_if_note005(out=out, messages=messages, max_rows=200)
+
 
             status = out.get("status")
             model_coeffs = out.get("model_coefficients") or {}
@@ -470,11 +507,16 @@ def run_test_building(
 
 if __name__ == "__main__":
     run_test_building(
-        building_id="building_023",
-        start_ref=date(2022, 1, 1),
+       building_id="building_050",
+        start_ref=date(2021, 1, 1),
         end_ref=date(2024, 6, 30),
         start_pred=date(2025, 1, 1),
-        end_pred=date(2025, 6, 30),
+        end_pred=date(2025 , 12, 1),
         show_details=True,
-        head_n=8,
+        head_n=10,
+
+
+
+
     )
+

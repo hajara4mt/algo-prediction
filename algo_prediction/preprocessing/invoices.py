@@ -27,6 +27,38 @@ def prepare_invoices_raw(df_inv: pd.DataFrame) -> pd.DataFrame:
     # Optionnel : gérer des valeurs spéciales de "value" (ex: 9999)
     # df.loc[df["value"] == 9999, "value"] = pd.NA
 
+    df = df.drop_duplicates(
+        subset=["deliverypoint_id_primaire", "fluid", "start", "end"],
+        keep="first",
+    ).reset_index(drop=True)
+
+    return df
+
+
+def dedup_invoices_like_r(df_inv: pd.DataFrame) -> pd.DataFrame:
+    """
+    R-like: pour chaque (deliverypoint_id_primaire, fluid),
+    trier par start puis supprimer les doublons de start (garder la 1ère).
+    """
+    if df_inv.empty:
+        return df_inv
+
+    df = df_inv.copy()
+    df["start"] = pd.to_datetime(df["start"], errors="coerce")
+    df["end"] = pd.to_datetime(df["end"], errors="coerce")
+
+    before = len(df)
+
+    # ordre R-like : order(invoice_start_date) puis !duplicated(invoice_start_date)
+    df = df.sort_values(["deliverypoint_id_primaire", "fluid", "start", "end"])
+    df = df.drop_duplicates(
+        subset=["deliverypoint_id_primaire", "fluid", "start"],
+        keep="first",
+    )
+
+    after = len(df)
+    df.attrs["dedup_like_r_removed_rows"] = before - after  # optionnel
+
     return df
 
 
@@ -196,6 +228,12 @@ def build_monthly_invoices(df_inv: pd.DataFrame) -> pd.DataFrame:
         return df_inv
 
     df_prep = prepare_invoices_raw(df_inv)
+    df_prep = dedup_invoices_like_r(df_prep)
+    removed = df_prep.attrs.get("dedup_like_r_removed_rows", 0)
+    print(f"[dedup_like_r] removed_rows={removed}")
+
+
+
     df_monthly = normalize_invoices_to_monthly(df_prep)
     df_agg = aggregate_monthly_invoices(df_monthly)
 
