@@ -18,8 +18,8 @@ def prepare_invoices_raw(df_inv: pd.DataFrame) -> pd.DataFrame:
     df = df_inv.copy()
 
     # S'assurer que start et end sont des datetime
-    df["start"] = pd.to_datetime(df["start"])
-    df["end"] = pd.to_datetime(df["end"])
+    df["start"] = pd.to_datetime(df["start"], errors="coerce")
+    df["end"] = pd.to_datetime(df["end"], errors="coerce")
 
     # Durée de la facture en jours (inclusif, comme dans le R : +1)
     df["invoice_duration"] = (df["end"] - df["start"]).dt.days + 1
@@ -67,7 +67,6 @@ def normalize_invoices_to_monthly(df_inv: pd.DataFrame) -> pd.DataFrame:
     Transforme les factures en factures mensuelles :
       - si une facture est sur un seul mois => gardée telle quelle
       - si une facture couvre plusieurs mois => répartie par prorata journalier
-      -
 
     Retourne un DataFrame avec :
       - start / end adaptés au mois
@@ -80,8 +79,15 @@ def normalize_invoices_to_monthly(df_inv: pd.DataFrame) -> pd.DataFrame:
 
     df = df_inv.copy()
 
+    # 🔐 Sécurité supplémentaire : on (re)force le typage datetime ici
+    df["start"] = pd.to_datetime(df["start"], errors="coerce")
+    df["end"] = pd.to_datetime(df["end"], errors="coerce")
+
     # Helper pour savoir si une facture est multi-mois
     def is_multimonth_row(row):
+        # Si start ou end sont NaT, on ne les considère pas comme multi-mois
+        if pd.isna(row["start"]) or pd.isna(row["end"]):
+            return False
         return (row["start"].year, row["start"].month) != (row["end"].year, row["end"].month)
 
     # Séparation en 2 groupes
@@ -92,16 +98,14 @@ def normalize_invoices_to_monthly(df_inv: pd.DataFrame) -> pd.DataFrame:
     # On va construire les factures proratisées dans une liste de dict/Series
     prorata_rows = []
 
-    #### Le prorata ici est gardé de la meme facon que la R , c'est qui etaot prsent dans le code est reste le meme , la next amelioration consiste à arrete cette prorata , et faire une separation des données en les allignant avec  les Djus journaliers ! 
-
-
+    # Prorata à la R : on répartit sur les jours puis on regroupe par mois
     for _, row in df_multi.iterrows():
         start = row["start"]
         end = row["end"]
         total_value = row["value"]
         duration = row["invoice_duration"]
 
-        if duration <= 0 or pd.isna(total_value):
+        if duration <= 0 or pd.isna(total_value) or pd.isna(start) or pd.isna(end):
             # On ignore les cas bizarres
             continue
 
@@ -142,6 +146,11 @@ def normalize_invoices_to_monthly(df_inv: pd.DataFrame) -> pd.DataFrame:
     # Concat : factures sur 1 mois + factures multi-mois proratisées
     df_monthly = pd.concat([df_single, df_prorata], ignore_index=True)
 
+    # 🔐 Très important : après concat, on peut avoir perdu le dtype datetime,
+    # on le reforce avant d'utiliser .dt (c'est ici que ça cassait sur Azure)
+    df_monthly["start"] = pd.to_datetime(df_monthly["start"], errors="coerce")
+    df_monthly["end"] = pd.to_datetime(df_monthly["end"], errors="coerce")
+
     # Ajout de month_year et month_year_end_date comme dans le R
     df_monthly["month_year"] = df_monthly["start"].dt.strftime("%Y%m")
     df_monthly["month_year_end_date"] = df_monthly["end"].dt.strftime("%Y%m")
@@ -170,7 +179,6 @@ def aggregate_monthly_invoices(df_monthly: pd.DataFrame) -> pd.DataFrame:
 
     group_cols = ["deliverypoint_id_primaire", "fluid", "month_year_end_date"]
 
-
     # On ordonne pour avoir des choix stables dans le groupby
     df = df.sort_values(["deliverypoint_id_primaire", "fluid", "start"])
 
@@ -198,8 +206,8 @@ def aggregate_monthly_invoices(df_monthly: pd.DataFrame) -> pd.DataFrame:
             "deliverypoint_number": first.get("deliverypoint_number"),
             "fluid": fluid,
             "fluid_unit": first.get("fluid_unit"),
-            "month_year": start_min.strftime("%Y%m"),
-            "month_year_end_date": end_max.strftime("%Y%m"),
+            "month_year": start_min.strftime("%Y%m") if pd.notna(start_min) else None,
+            "month_year_end_date": end_max.strftime("%Y%m") if pd.notna(end_max) else None,
         }
 
         agg_rows.append(new_row)
@@ -231,8 +239,6 @@ def build_monthly_invoices(df_inv: pd.DataFrame) -> pd.DataFrame:
     df_prep = dedup_invoices_like_r(df_prep)
     removed = df_prep.attrs.get("dedup_like_r_removed_rows", 0)
     print(f"[dedup_like_r] removed_rows={removed}")
-
-
 
     df_monthly = normalize_invoices_to_monthly(df_prep)
     df_agg = aggregate_monthly_invoices(df_monthly)
