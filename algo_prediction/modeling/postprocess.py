@@ -131,15 +131,12 @@ def build_y_like_r(
     df = df.sort_values(month_col).copy()
     df["consumption_imputation"] = pd.to_numeric(df["consumption_imputation"], errors="coerce").astype(float)
 
-    # ✅ OUTLIERS (R-like option)
-    # - iterate=1 + enable_pass2=False => stable + évite les "outliers en plus" qui changent tout le modèle
+    # ✅ OUTLIERS (R-like: thres=3, iterate=2)
     res_out = ts_anomaly_detection_like_r(
         df["consumption_imputation"],
         period=12,
         thres=3.0,
-        lowess_frac=0.35,
-        iterate=1,
-        enable_pass2=False,
+        iterate=2,
     )
 
     out_mask = pd.Series(res_out.outlier_mask, index=df.index).fillna(False).astype(bool)
