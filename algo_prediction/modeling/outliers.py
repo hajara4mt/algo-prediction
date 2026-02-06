@@ -130,7 +130,17 @@ def _seasonal_strength_and_seasadj(xx: np.ndarray, period: int) -> Tuple[np.ndar
 def _supsmu_smooth(tt: np.ndarray, xx: np.ndarray, n: int, period: int) -> np.ndarray:
     """
     Smoothing function that approximates R's supsmu.
-    Uses Theil-Sen for very short series, lowess otherwise.
+
+    R's supsmu uses Friedman's Super Smoother with adaptive span selection.
+    For small samples (n < 40), R typically uses larger spans (0.4-0.6) which
+    produce FLATTER smooths. This reduces false positives by keeping residuals
+    smaller for normal values.
+
+    Key insight: Python's lowess with small span produces a "wiggly" curve
+    that follows local variations too closely, creating larger residuals for
+    normal values and causing false positive outliers.
+
+    V25: Use span=0.6 for n<40 to match R's flatter smooth behavior.
     """
     from scipy.stats import theilslopes
 
@@ -142,9 +152,14 @@ def _supsmu_smooth(tt: np.ndarray, xx: np.ndarray, n: int, period: int) -> np.nd
         except Exception:
             pass
 
-    # For longer series, use lowess with adaptive fraction
-    # R's supsmu uses span = "cv" which adapts, we use a reasonable default
-    frac = max(0.25, min(0.5, 8.0 / n))  # adaptive fraction
+    # V25: Use LARGE span for small samples to match R's supsmu behavior
+    # R's supsmu produces a FLATTER smooth than lowess with small span
+    # Empirical testing shows span=0.6 for n<40 matches R's outlier detection
+    if n < 40:
+        frac = 0.6  # Large span = flat smooth = smaller residuals for normal values
+    else:
+        # For larger series, adaptive span but never too small
+        frac = max(0.5, min(0.7, 20.0 / n))
 
     try:
         fitted = lowess(endog=xx, exog=tt, frac=frac, it=0, return_sorted=False)
