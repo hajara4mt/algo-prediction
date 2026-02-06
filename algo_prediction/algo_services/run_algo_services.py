@@ -1,4 +1,3 @@
-# algo_prediction/run_algo_service.py (version "STRICTEMENT comme test_merge_split")
 
 from __future__ import annotations
 
@@ -16,7 +15,7 @@ from algo_prediction.domain import RequestParams
 
 from algo_prediction.preprocessing.invoices import build_monthly_invoices
 from algo_prediction.preprocessing.usage_data import build_monthly_usage_factors
-from algo_prediction.preprocessing.months import build_month_year_invoice   # ✅ comme le test
+from algo_prediction.preprocessing.months import build_month_year_invoice   
 from algo_prediction.preprocessing.dju import get_degreedays_mentuel
 from algo_prediction.preprocessing.model_table import (
     build_model_table_for_pdl_fluid,
@@ -103,6 +102,9 @@ def run_building_and_persist(
     # Accumulateurs
     pred_dfs: List[pd.DataFrame] = []
     model_rows: List[Dict[str, Any]] = []
+    # 🔥 NOUVEAU : accumulateurs pour l’API
+    outliers_details: List[Dict[str, Any]] = []
+    outliers_notes: List[str] = []
 
     # ✅ EXACTEMENT comme le test : boucle PDL puis boucle fluids (building-level)
     fluids = sorted(inv_monthly["fluid"].dropna().unique().tolist())
@@ -174,7 +176,29 @@ def run_building_and_persist(
             acc = out.get("accuracy_reference_model")
             pred = out.get("predictive_consumption")
 
+            # DEBUG OUTLIERS
+            out_ref = out.get("outliers_reference")
+            n_out = 0
+            try:
+                if out_ref is not None:
+                    n_out = len(out_ref)
+            except Exception:
+                n_out = -1  # si ce n'est pas un DataFrame / list classique
+
+            print(
+                f"[DEBUG OUTLIERS] building={building_id}, pdl={pdl_id}, fluid={fluid}, "
+                f"n_outliers_reference={n_out}"
+            )
+
+            print("[DEBUG MESSAGES]")
+            for m in messages:
+                print("   ", m)
+
             # ---------- Models row ----------
+            for msg in messages:
+                if msg.startswith("note_005") or msg.startswith("debug_outliers_months"):
+                    outliers_notes.append(msg)
+
             row: Dict[str, Any] = {
                 "deliverypoint_id_primaire": pdl_id,
                 "fluid": fluid,
@@ -199,9 +223,20 @@ def run_building_and_persist(
             # ✅ Outliers persistés (si présents)
             outliers_df = out.get("outliers_reference")
             if outliers_df is not None and not outliers_df.empty:
-                row["outliers_json"] = outliers_df.to_dict(orient="records")
+                records = outliers_df.to_dict(orient="records")
+                row["outliers_json"] = records
+
+                # 🔥 On alimente la liste globale (avec contexte PDL / fluide)
+               # for rec in records:
+                #    rec_with_ctx = {
+                 #       **rec,
+                  #      "deliverypoint_id_primaire": pdl_id,
+                   #     "fluid": fluid,
+                    #}
+                    #outliers_details.append(rec_with_ctx)
             else:
                 row["outliers_json"] = []
+
 
             # Metrics
             try:
@@ -264,6 +299,34 @@ def run_building_and_persist(
     # (Si c’était un hack temporaire, enlève ce bloc dans test ET ici.)
     if "month_str" in df_predictions_all.columns:
         df_predictions_all = df_predictions_all[df_predictions_all["month_str"].astype(str) <= "2025-11"]
+    
+ 
+    if not df_models_all.empty:
+        # --------- DÉTAILS DES OUTLIERS (les 4 lignes que tu vois dans le test) ---------
+        if "outliers_json" in df_models_all.columns:
+         for _, row in df_models_all.iterrows():
+            pdl_id = row.get("deliverypoint_id_primaire")
+            fluid = row.get("fluid")
+            records = row.get("outliers_json") or []
+
+            for rec in records:
+                merged = {
+                    **rec,
+                    "deliverypoint_id_primaire": pdl_id,
+                    "fluid": fluid,
+                }
+                outliers_details.append(merged)
+
+        # --------- NOTES : note_005 + debug_outliers_months ---------
+        if "debug_messages" in df_models_all.columns:
+         for _, row in df_models_all.iterrows():
+            dbg = row.get("debug_messages") or ""
+            for line in str(dbg).splitlines():
+                if line.startswith("note_005") or line.startswith("debug_outliers_months"):
+                    outliers_notes.append(line)
+
+    # Déduplication des notes en conservant l'ordre
+    outliers_notes = list(dict.fromkeys(outliers_notes))
 
     # Persist
     run_id, created_at = persist_predictions_monthly(
@@ -283,4 +346,6 @@ def run_building_and_persist(
         "created_at": str(created_at),
         "results": df_predictions_all.to_dict(orient="records"),
         "models": df_models_all.to_dict(orient="records"),
+        "outliers_details": outliers_details,
+        "outliers_notes": outliers_notes,
     }

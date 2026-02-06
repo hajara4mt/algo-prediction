@@ -16,10 +16,7 @@ META_COLS: Set[str] = {
 }
 
 def detect_usage_factor_cols(df: pd.DataFrame) -> List[str]:
-    """
-    Fidèle à l'esprit du R: name_influencing_factor = "colonnes des facteurs d'usage"
-    Ici on les détecte comme: toutes les colonnes numériques qui ne sont ni meta, ni DJU, ni value.
-    """
+    
     cols = []
     for c in df.columns:
         if c in META_COLS:

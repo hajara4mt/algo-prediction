@@ -183,6 +183,7 @@ def aggregate_monthly_invoices(df_monthly: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_values(["deliverypoint_id_primaire", "fluid", "start"])
 
     agg_rows = []
+    
 
     for (pdl_id, fluid, month_end_str), group in df.groupby(group_cols):
         # start = date la plus tôt

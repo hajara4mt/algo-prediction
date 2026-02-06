@@ -56,8 +56,8 @@ def decide_training_strategy_like_r(
     # =========================
     # CASE 3 — Toutes à zéro
     # =========================
-    non_na = y.dropna()
-    if not non_na.empty and (non_na == 0).all():
+    # CASE 3 — Toutes à zéro (R: sum(==0) == nrow)
+    if (y == 0).sum() == len(train):
         messages.append(
             f"note_000: {fluid} PDL {pdl_id}: all reference invoice are null (zero)"
         )

@@ -372,6 +372,19 @@ def run_best_dju_model_like_r(
     out["hdd_used"] = best_hdd
     out["cdd_used"] = best_cdd
 
+
+    # DEBUG: Afficher les valeurs utilisées pour MAPE
+    print("=== DEBUG MAPE ===")
+    print(f"y_np (consumption_correction): {y_np.tolist()}")
+    print(f"yhat_train (fitted): {yhat_train.tolist()}")
+    print(f"Nombre de points: {len(y_np)}")
+
+# Calculer PE pour chaque point
+    pe = (y_np - yhat_train) / y_np * 100
+    print(f"PE par point: {pe.tolist()}")
+    print(f"MAPE calculé: {np.mean(np.abs(pe)):.2f}")
+
+
     return {
         "model_coefficients": model_coefficients,
         "accuracy_reference_model": accuracy,

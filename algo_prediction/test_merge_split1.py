@@ -82,14 +82,7 @@ def compute_building_metrics_from_pairs(
     surface: float,
     occupant: float,
 ) -> Dict[str, float]:
-    """
-    - annual_refs: liste des annual_consumption_reference (kWh/an) de chaque PDL×fluid modélisé
-    - surface, occupant: récupérés depuis get_site_info
-
-    Règle demandée:
-      - si surface==0 ou occupant==0 => ratio = NaN
-      - si annual_refs vide => total = NaN
-    """
+    
     if len(annual_refs) == 0:
         total_ref = float("nan")
     else:
@@ -507,13 +500,20 @@ def run_test_building(
 
 if __name__ == "__main__":
     run_test_building(
-       building_id="building_050",
+        building_id="building_NHZ1R",
         start_ref=date(2021, 1, 1),
-        end_ref=date(2024, 6, 30),
-        start_pred=date(2025, 1, 1),
-        end_pred=date(2025 , 12, 1),
+        end_ref=date(2022, 9, 30),
+        start_pred=date(2025, 6, 1),
+        end_pred=date(2025 , 12, 31),
         show_details=True,
-        head_n=10,
+        head_n=5,
+
+
+
+
+
+
+
 
 
 

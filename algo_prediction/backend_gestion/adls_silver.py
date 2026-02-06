@@ -160,12 +160,9 @@ class AdlsSilverBackend(BackendBase):
             how="left",
         )
 
-        # 5. S'assurer que les dates sont bien au format datetime
         inv_building["start"] = pd.to_datetime(inv_building["start"])
         inv_building["end"] = pd.to_datetime(inv_building["end"])
 
-        # On laisse la suite du traitement (prorata, agrégation, etc.)
-        # à un module de preprocessing, pour garder ce backend "simple".
         return inv_building
 
 
@@ -251,10 +248,7 @@ def write_parquet_to_adls(df: pd.DataFrame, path: str) -> None:
 
 
 def delete_adls_prefix(prefix_path: str) -> None:
-    """
-    Supprime récursivement tout ce qu'il y a sous un 'dossier' (prefix) ADLS.
-    Si le path n'existe pas -> ne fait rien (idempotent).
-    """
+    
     fs_client = _get_fs_client()
 
     try:

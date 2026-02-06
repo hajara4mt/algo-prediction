@@ -9,29 +9,16 @@ from algo_prediction.domain import RequestParams, SiteInfo
 
 
 class BackendBase(ABC):
-    """
-    Interface de base pour un backend de données.
-
-    Une implémentation (ex: AdlsSilverBackend) devra
-    fournir toutes ces méthodes pour que l'algo
-    puisse récupérer les données dont il a besoin.
-    """
+    
 
     @abstractmethod
     def get_site_info(self, params: RequestParams) -> SiteInfo:
-        """
-        Récupère les infos du bâtiment (surface, occupants, station météo, etc.)
-        à partir de la silver `building`.
-        """
+       
         raise NotImplementedError
 
     @abstractmethod
     def get_invoices(self, params: RequestParams) -> pd.DataFrame:
-        """
-        Récupère toutes les factures (invoice) associées au bâtiment :
-        - join deliverypoint + invoice
-        - pas encore de prorata ni d'agrégation, juste les lignes brutes.
-        """
+       
         raise NotImplementedError
 
     @abstractmethod
