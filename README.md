@@ -304,23 +304,169 @@ curl -X POST "https://<function-app>.azurewebsites.net/api/predict" \
 
 ## 🔗 Correspondance R / Python
 
-| Étape | Fonction R | Fonction Python |
-|-------|------------|-----------------|
-| Pipeline principal | `predictive_consumption_modelisation()` | `run_building_and_persist()` |
-| Imputation missing | `ranking_method()` | `ranking_method_like_r()` |
-| Détection outliers | `ts_anomaly_detection()` | `ts_anomaly_detection_like_r()` |
-| Sélection DJU | `which.max(accuracy_dju_hdd)` | `choose_best_hdd_cdd_like_r()` |
-| Régression | `lm()` | `np.linalg.lstsq()` |
-| Métriques | `forecast::accuracy()` | `regression_metrics()` |
-| Quantiles IQR | `quantile(type=7)` | `_quantile_type7()` |
-| Seasonal adjustment | `forecast::mstl() + seasadj()` | `STL() + seasonal` |
-| Smoothing | `supsmu()` | `lowess()` |
+### Pipeline Principal
+
+| R (`predictive_consumption_modelisation`) | Python (`run_building_and_persist`) |
+|-------------------------------------------|-------------------------------------|
+| `for (fluid in fluids) { for (pdl in pdls) {...} }` | `for pdl_id in pdls: for fluid in fluids:` |
+| `retrieve_invoice` → GET backend | `backend.get_invoices()` → ADLS Parquet |
+| `retrieve_dju_data` → GET backend | `get_degreedays_mentuel()` → ADLS Parquet |
+| `retrieve_influencing_factor` → GET backend | `build_monthly_usage_factors()` → ADLS Parquet |
+| `index_ref <- which(start >= start_ref & end <= end_ref)` | `split_train_test_like_r()` |
+| `train <- data.frame(retrieve_invoice[index_ref, ])` | `train, test = split_train_test_like_r(...)` |
+
+---
+
+### Sélection Optimal DJU
+
+| R (lignes 1143-1158) | Python (`choose_best_hdd_cdd_like_r`) |
+|----------------------|---------------------------------------|
+| `accuracy_dju_hdd <- sapply(dju_ref_hdd, function(x){` | `for col in hdd_cols:` |
+| `  model <- summary(lm(invoice.consumption ~ x, data=train))` | `  _, adj = r2_and_adj_r2(y, X @ beta, p)` |
+| `  model$adj.r.squared` | `  hdd_scores[col] = adj` |
+| `})` | |
+| `names(which.max(accuracy_dju_hdd))` | `best_hdd = max(hdd_scores, key=hdd_scores.get)` |
+
+---
+
+### Traitement Valeurs Manquantes
+
+| R (lignes 1160-1190) | Python (`build_y_like_r` + `ranking_method_like_r`) |
+|----------------------|-----------------------------------------------------|
+| `number_of_gaps <- sum(is.na(train$invoice.consumption))/nrow(train)` | `gap_ratio = df["is_missing"].mean()` |
+| `if (number_of_gaps >= 0.2) { note_003 }` | `if gap_ratio >= 0.2: messages.append("note_003...")` |
+| `train$is_missing <- is.na(train$invoice.consumption)` | `df["is_missing"] = y_raw.isna()` |
+| `if (sum(train$is_missing) != 0) { note_004 }` | `if df["is_missing"].sum() > 0: messages.append("note_004...")` |
+
+#### ranking_method
+
+| R (`ranking_method`, lignes 448-475) | Python (`ranking_method_like_r`) |
+|--------------------------------------|----------------------------------|
+| `linear_interpolation <- interpolation_missing(x, "linear")` | `linear = interpolation_missing_linear(s)` |
+| `Kalman_StructTS <- na_Kalman_Smooth(x, "StructTS")` | `kalman = kalman_smooth_structts_like(s)` |
+| `if (period > 1 && length(x) > 2*period) {` | `if period > 1 and len(s) > 2 * period:` |
+| `  season_stl_loess <- forecast::na.interp(x)` | `  season = seasonal_stl_loess_like(s, period)` |
+| `}` | |
+| `weighted_combination <- rowMeans(combination)` | `df["weighted_combination"] = df.mean(axis=1)` |
+
+#### Refit DJU sur Missing
+
+| R (lignes 1182-1183) | Python (`_predict_dju_fitted`) |
+|----------------------|--------------------------------|
+| `fit <- lm(consumption_imputation ~ HDD + CDD, data=train)` | `beta = np.linalg.lstsq(X_fit, y_fit)` |
+| `train$consumption_imputation[is_missing] <- fit$fitted.values[is_missing]` | `df.loc[is_missing, "consumption_imputation"] = fitted[is_missing]` |
+
+---
+
+### Détection Outliers
+
+| R (`ts_anomaly_detection`, lignes 382-434) | Python (`ts_anomaly_detection_like_r`) |
+|--------------------------------------------|----------------------------------------|
+| `n <- length(x)` | `n = len(x)` |
+| `freq <- frequency(x)` | `period = 12` |
+| `if (nmiss > 0) { xx <- forecast::na.interp(x) }` | `xx = _na_interp_ts_like(x, period)` |
+| `if (freq > 1 && n > 2*freq) {` | `if period > 1 and n > 2 * period:` |
+| `  fit <- forecast::mstl(xx, robust=TRUE)` | `  stl = STL(xx, period, robust=True).fit()` |
+| `  strength <- 1 - var(rem)/var(detrend)` | `  strength = 1 - var(rem) / var(detrend)` |
+| `  if (strength >= 0.6) { xx <- seasadj(fit) }` | `  if strength >= 0.6: xx = xx - seasonal` |
+| `}` | |
+| `mod <- supsmu(tt, xx)` | `smooth = lowess(xx, tt, frac=0.25, it=0)` |
+| `resid <- xx - mod$y` | `resid = xx - smooth` |
+| `resid.q <- quantile(resid, c(0.25, 0.75))` | `q1 = _quantile_type7(resid, 0.25)` |
+| `iqr <- diff(resid.q)` | `iqr = q3 - q1` |
+| `limits <- resid.q + thres * iqr * c(-1, 1)` | `low = q1 - thres * iqr` ; `high = q3 + thres * iqr` |
+| `outliers <- which(resid < limits[1] \| resid > limits[2])` | `out_mask = (resid < low) \| (resid > high)` |
+| `if (iterate > 1) { tsoutliers(x, iterate=1) }` | `for pass_num in range(1, iterate + 1):` |
+
+---
+
+### Correction Outliers
+
+| R (lignes 1204-1226) | Python (`build_y_like_r`) |
+|----------------------|---------------------------|
+| `ts_data <- ts(train$consumption_imputation, frequency=12)` | `res = ts_anomaly_detection_like_r(df["consumption_imputation"])` |
+| `anomaly_detection <- ts_anomaly_detection(ts_data, thres=3)` | |
+| `train$is_anomaly <- is.na(anomaly_detection$x)` | `df["is_anomaly"] = res.outlier_mask` |
+| `if (sum(train$is_anomaly) != 0) { note_005 }` | `if out_mask.sum() > 0: messages.append("note_005...")` |
+| `ts_data <- ts(anomaly_detection$x, frequency=12)` | `base = df["consumption_imputation"].copy()` |
+| `# (x avec NA aux outliers)` | `base.loc[out_mask] = np.nan` |
+| `missing_imputation <- ranking_method(ts_data, period=12)` | `corr = ranking_method_like_r(base, period=12)` |
+| `train$consumption_correction <- missing_imputation$weighted_combination` | `df["consumption_correction"] = corr["weighted_combination"]` |
+| `fit <- lm(consumption_correction ~ HDD + CDD, data=train)` | `fitted = _predict_dju_fitted(df, "consumption_correction", ~is_anomaly)` |
+| `train$consumption_correction[is_anomaly] <- fit$fitted.values[is_anomaly]` | `df.loc[is_anomaly, "consumption_correction"] = fitted[is_anomaly]` |
+
+---
+
+### Règle des Zéros
+
+| R (lignes 1235-1258) | Python (`build_y_like_r`) |
+|----------------------|---------------------------|
+| `train0 <- train[which(train$consumption_imputation != 0),]` | `df_wo0 = df[df["consumption_imputation"] != 0]` |
+| `accuracy_ref_invoice0 <- sapply(ref_invoice, ...)` | `s_wo0 = _score_adj_r2(df_wo0, "consumption_imputation")` |
+| `accuracy_ref_invoice <- sapply(ref_invoice, ...)` | `s_with0 = _score_adj_r2(df, "consumption_imputation")` |
+| `if (accuracy_ref_invoice0[1] >= accuracy_ref_invoice[1]) {` | `if s_wo0 >= s_with0:` |
+| `  train <- train0` | `  df = df_wo0` |
+| `  note_006: "WITHOUT ZEROS selected"` | `  messages.append("note_006...")` |
+| `} else { note_007: "WITH CORRECTED ZEROS selected" }` | `else: messages.append("note_007...")` |
+
+---
+
+### Sélection Best Y
+
+| R (lignes 1261-1268) | Python (`build_y_like_r`) |
+|----------------------|---------------------------|
+| `ref_invoice <- c("consumption_imputation", "consumption_correction")` | `s_imp = _score_adj_r2(df, "consumption_imputation")` |
+| `accuracy_ref_invoice <- sapply(ref_invoice, function(x){` | `s_cor = _score_adj_r2(df, "consumption_correction")` |
+| `  model <- summary(lm(x ~ HDD + CDD, data=train))` | |
+| `  model$adj.r.squared` | |
+| `})` | |
+| `names(which.max(accuracy_ref_invoice))` | `best_y = "imputation" if s_imp >= s_cor else "correction"` |
+| `note_008: "xxx was selected as the best outcome Y"` | `messages.append("note_008: {best_y} selected...")` |
+
+---
+
+### Modèle Final & Prédictions
+
+| R (lignes 1286-1302) | Python (`run_best_dju_model_like_r`) |
+|----------------------|--------------------------------------|
+| `groupvars <- c(optimal_dju_name, name_influencing_factor)` | `features = [best_hdd, best_cdd] + influencing_cols` |
+| `fit <- lm(best_Y ~ groupvars, data=train)` | `beta = np.linalg.lstsq(X_train, y_train)` |
+| `model_coefficients <- list(` | `model_coefficients = {` |
+| `  a_coefficient = fit$coefficients[-1],` | `  "a_coefficient.hdd": beta[1],` |
+| `  b_coefficient = fit$coefficients[1]` | `  "b_coefficient": beta[0]` |
+| `)` | `}` |
+| `accuracy <- forecast::accuracy(y_true, y_pred)` | `metrics = regression_metrics(y_true, y_pred)` |
+| `R2 <- summary(fit)$r.squared` | `r2, adj_r2 = r2_and_adj_r2(y, yhat, p)` |
+| `pred <- predict(fit, test, interval="confidence")` | `y_pred = X_test @ beta` |
+| `confidence_lower95 = pred$lwr` | `ci = t_crit * se` → `lower = y_pred - ci` |
+| `confidence_upper95 = pred$upr` | `upper = y_pred + ci` |
+
+---
+
+### Messages / Notes
+
+| Code R | Code Python | Description |
+|--------|-------------|-------------|
+| `note_000` | `TrainStatus.NO_REFERENCE_DATA` | Aucune donnée de référence |
+| `note_001` | `TrainStatus.TOO_FEW_OBSERVATIONS` | Moins de 6 observations → modèle moyenne |
+| `note_003` | `"note_003: MISSING > 20%"` | Plus de 20% de valeurs manquantes |
+| `note_004` | `"note_004: MISSING data occurred"` | Présence de valeurs manquantes |
+| `note_005` | `"note_005: ANOMALIES data occurred"` | Outliers détectés |
+| `note_006` | `"note_006: WITHOUT ZEROS selected"` | Données sans zéros sélectionnées |
+| `note_007` | `"note_007: WITH CORRECTED ZEROS"` | Données avec zéros corrigés |
+| `note_008` | `"note_008: {Y} selected as best Y"` | Meilleur Y sélectionné |
+| `note_009` | `"debug_postprocess_dju: best_hdd=..."` | Meilleur DJU sélectionné |
+
+---
 
 ### Note sur l'Alignement
 
-L'implémentation Python reproduit fidèlement ~95% du comportement R. La seule différence notable concerne la fonction de lissage :
+L'implémentation Python reproduit fidèlement **~95%** du comportement R. La seule différence notable concerne la fonction de lissage dans `ts_anomaly_detection` :
 
-- **R** : `supsmu()` (Friedman's Super Smoother avec cross-validation)
-- **Python** : `lowess()` avec span fixe optimisé (0.25 pour n<40)
+| Aspect | R | Python |
+|--------|---|--------|
+| Fonction | `supsmu()` | `lowess()` |
+| Span | Cross-validation automatique | Fixe: 0.25 (n<40), 0.20 (n<100), 0.15 (n≥100) |
+| Itérations robustes | Non (supsmu n'en a pas) | `it=0` (désactivées pour matcher R) |
 
-Cette différence peut occasionnellement produire des variations mineures dans la détection d'outliers pour les cas limites.
+Cette différence peut occasionnellement produire des variations mineures dans la détection d'outliers pour les valeurs proches des bornes IQR.
