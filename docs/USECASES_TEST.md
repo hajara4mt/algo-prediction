@@ -171,18 +171,18 @@ Ce document décrit les **113 cas de test** pour valider le code Python de préd
 
 | # | Usecase | Prio | Statut | Comportement Attendu (R) | Fichier Python |
 |---|---------|------|--------|--------------------------|----------------|
-| 64 | Aucun outlier détecté | P1 | ✅ | Pas de `note_005`, `consumption_correction = raw` | `postprocess.py:178-180` |
-| 65 | Tous points = outliers | P2 | ✅ | Tous détectés → correction par ranking_method | `outliers.py` |
-| 66 | Outlier en première position | P1 | ✅ | Détecté normalement par lowess + IQR | `outliers.py` |
-| 67 | Outlier en dernière position | P1 | ✅ | Détecté normalement par lowess + IQR | `outliers.py` |
-| 68 | Outliers consécutifs (3 mois) | P1 | ✅ | Chacun détecté individuellement | `outliers.py` |
-| 69 | Valeur exactement sur borne IQR | P2 | ✅ | Test `<` et `>` (pas `<=` `>=`) → sur la borne = pas outlier | `outliers.py:57-58` |
-| 70 | Série très courte (n < 20) | P1 | ✅ | Span adapté + fallback Theil-Sen si n ≤ 12 | `outliers.py:148-162` |
-| 71 | Série constante (variance=0) | P1 | ✅ | `is.constant` check → return empty outliers | `outliers.py:101-103` |
-| 72 | Strength exactement = 0.6 | P2 | ✅ | `strength >= 0.6` → seasonal adjustment appliqué | `outliers.py:124` |
-| 73 | 2ème passe trouve plus d'outliers | P2 | ✅ | `iterate=2` dans le code | `outliers.py` |
-| 74 | Imputation crée pic → détecté outlier | P2 | ✅ | Comportement attendu du pipeline séquentiel | `postprocess.py` |
-| 75 | Outlier sur point déjà imputé | P2 | ✅ | Double correction possible | `postprocess.py:163-176` |
+| 63 | Aucun outlier détecté | P1 | ✅ | Pas de `note_005`, `consumption_correction = raw` | `postprocess.py:178-180` |
+| 64 | Tous points = outliers | P2 | ✅ | Tous détectés → correction par ranking_method | `outliers.py` |
+| 65 | Outlier en première position | P1 | ✅ | Détecté normalement par lowess + IQR | `outliers.py` |
+| 66 | Outlier en dernière position | P1 | ✅ | Détecté normalement par lowess + IQR | `outliers.py` |
+| 67 | Outliers consécutifs (3 mois) | P1 | ✅ | Chacun détecté individuellement | `outliers.py` |
+| 68 | Valeur exactement sur borne IQR | P2 | ✅ | Test `<` et `>` (pas `<=` `>=`) → sur la borne = pas outlier | `outliers.py:57-58` |
+| 69 | Série très courte (n < 20) | P1 | ✅ | Span adapté + fallback Theil-Sen si n ≤ 12 | `outliers.py:148-162` |
+| 70 | Série constante (variance=0) | P1 | ✅ | `is.constant` check → return empty outliers | `outliers.py:101-103` |
+| 71 | Strength exactement = 0.6 | P2 | ✅ | `strength >= 0.6` → seasonal adjustment appliqué | `outliers.py:124` |
+| 72 | 2ème passe trouve plus d'outliers | P2 | ✅ | `iterate=2` dans le code | `outliers.py` |
+| 73 | Imputation crée pic → détecté outlier | P2 | ✅ | Comportement attendu du pipeline séquentiel | `postprocess.py` |
+| 74 | Outlier sur point déjà imputé | P2 | ✅ | Double correction possible | `postprocess.py:163-176` |
 
 ---
 
@@ -190,10 +190,10 @@ Ce document décrit les **113 cas de test** pour valider le code Python de préd
 
 | # | Usecase | Prio | Statut | Comportement Attendu (R) | Fichier Python |
 |---|---------|------|--------|--------------------------|----------------|
-| 77 | Égalité parfaite adj R² (imp vs corr) | P1 | ✅ | `s_imp >= s_cor` → **imputation gagne** en cas d'égalité | `postprocess.py:202` |
-| 78 | Sans zéros → seulement 3 obs | P0 | ⚠️ | **Non vérifié en R** — régression avec 3 obs (pas de recheck seuil 6) | `postprocess.py:190-192` |
-| 79 | Toutes consommations = 0 | P1 | ✅ | `df_wo0` vide → `s_wo0 = -inf` → zéros conservés | `postprocess.py:187` |
-| 80 | R² raw > imputé → < 6 obs après drop NA | P2 | ⚠️ | **Non vérifié en R** — régression avec < 6 obs | `postprocess.py:124-126` |
+| 75 | Égalité parfaite adj R² (imp vs corr) | P1 | ✅ | `s_imp >= s_cor` → **imputation gagne** en cas d'égalité | `postprocess.py:202` |
+| 76 | Sans zéros → seulement 3 obs | P0 | ⚠️ | **Non vérifié en R** — régression avec 3 obs (pas de recheck seuil 6) | `postprocess.py:190-192` |
+| 77 | Toutes consommations = 0 | P1 | ✅ | `df_wo0` vide → `s_wo0 = -inf` → zéros conservés | `postprocess.py:187` |
+| 78 | R² raw > imputé → < 6 obs après drop NA | P2 | ⚠️ | **Non vérifié en R** — régression avec < 6 obs | `postprocess.py:124-126` |
 
 ---
 
@@ -201,22 +201,22 @@ Ce document décrit les **113 cas de test** pour valider le code Python de préd
 
 | # | Usecase | Prio | Statut | Comportement Attendu (R) | Fichier Python |
 |---|---------|------|--------|--------------------------|----------------|
-| 81 | Tous HDD ont adj R² négatif | P1 | ✅ | `best_hdd = None` → régression sur CDD seul ou fallback mean | `dju_model.py:170` |
-| 82 | R² > 0.99 (overfitting potentiel) | P2 | ⚠️ | **Non signalé en R** — stocké tel quel | `dju_model.py` |
-| 83 | R² négatif | P1 | ✅ | Possible, stocké tel quel | `dju_model.py:107` |
-| 84 | Matrice singulière (colonnes colinéaires) | P2 | ✅ | `np.linalg.lstsq(..., rcond=None)` gère via pseudo-inverse | `dju_model.py` |
-| 85 | IC 95% plus large que prédiction | P2 | ✅ | Possible, pas de garde-fou | `dju_model.py` |
-| 86 | Prédictions partiellement NA | P1 | ✅ | `note: some months have missing predictors → NA` | `dju_model.py:322-326` |
-| 87 | Prédictions négatives | P0 | ⚠️ | **Pas de garde-fou en R** — modèle linéaire peut prédire < 0 | `dju_model.py` |
-| 88 | IC lower95 < 0 | P2 | ⚠️ | **Pas de garde-fou en R** — peut être négatif | `dju_model.py` |
-| 89 | HDD et CDD tous adj R² négatif | P0 | ✅ | `return None` → fallback mean model | `dju_model.py:256-258` |
-| 90 | DJU avec NA après jointure | P1 | ✅ | Lignes exclues du fit | `dju_model.py:284-286` |
-| 91 | Tous facteurs constants (sd=0) | P1 | ✅ | Facteurs retirés + `note_012`, régression DJU seul | `usage_data.py:79-91` |
-| 92 | Facteur absent en pred | P1 | ✅ | `return None` → fallback mean model | `dju_model.py:309-312` |
-| 93 | Plus de variables que d'observations | P2 | ✅ | `np.linalg.lstsq` pseudo-inverse (adj R² sera bizarre) | `dju_model.py` |
-| 94 | DJU identiques sur toute la période | P1 | ✅ | Variance=0 → adj R² = -inf → non sélectionné | `dju_model.py` |
-| 95 | Interpolation crée corrélation spurieuse | P2 | ⚠️ | **Pas de détection en R** — comportement possible | - |
-| 96 | Test DJU hors range train (extrapolation) | P2 | ⚠️ | **Pas de warning en R** — extrapolation silencieuse | `dju_model.py` |
+| 79 | Tous HDD ont adj R² négatif | P1 | ✅ | `best_hdd = None` → régression sur CDD seul ou fallback mean | `dju_model.py:170` |
+| 80 | R² > 0.99 (overfitting potentiel) | P2 | ⚠️ | **Non signalé en R** — stocké tel quel | `dju_model.py` |
+| 81 | R² négatif | P1 | ✅ | Possible, stocké tel quel | `dju_model.py:107` |
+| 82 | Matrice singulière (colonnes colinéaires) | P2 | ✅ | `np.linalg.lstsq(..., rcond=None)` gère via pseudo-inverse | `dju_model.py` |
+| 83 | IC 95% plus large que prédiction | P2 | ✅ | Possible, pas de garde-fou | `dju_model.py` |
+| 84 | Prédictions partiellement NA | P1 | ✅ | `note: some months have missing predictors → NA` | `dju_model.py:322-326` |
+| 85 | Prédictions négatives | P0 | ⚠️ | **Pas de garde-fou en R** — modèle linéaire peut prédire < 0 | `dju_model.py` |
+| 86 | IC lower95 < 0 | P2 | ⚠️ | **Pas de garde-fou en R** — peut être négatif | `dju_model.py` |
+| 87 | HDD et CDD tous adj R² négatif | P0 | ✅ | `return None` → fallback mean model | `dju_model.py:256-258` |
+| 88 | DJU avec NA après jointure | P1 | ✅ | Lignes exclues du fit | `dju_model.py:284-286` |
+| 89 | Tous facteurs constants (sd=0) | P1 | ✅ | Facteurs retirés + `note_012`, régression DJU seul | `usage_data.py:79-91` |
+| 90 | Facteur absent en pred | P1 | ✅ | `return None` → fallback mean model | `dju_model.py:309-312` |
+| 91 | Plus de variables que d'observations | P2 | ✅ | `np.linalg.lstsq` pseudo-inverse (adj R² sera bizarre) | `dju_model.py` |
+| 92 | DJU identiques sur toute la période | P1 | ✅ | Variance=0 → adj R² = -inf → non sélectionné | `dju_model.py` |
+| 93 | Interpolation crée corrélation spurieuse | P2 | ⚠️ | **Pas de détection en R** — comportement possible | - |
+| 94 | Test DJU hors range train (extrapolation) | P2 | ⚠️ | **Pas de warning en R** — extrapolation silencieuse | `dju_model.py` |
 
 ---
 
@@ -224,10 +224,10 @@ Ce document décrit les **113 cas de test** pour valider le code Python de préd
 
 | # | Usecase | Prio | Statut | Comportement Attendu (R) | Fichier Python |
 |---|---------|------|--------|--------------------------|----------------|
-| 97 | Chemin ADLS inexistant | P2 | ✅ | Azure crée automatiquement le chemin | `adls_silver.py` |
-| 98 | NaN/Infinity dans JSON | P1 | ✅ | `json.dumps(..., default=str)` convertit en string | `run_algo_services.py` |
-| 99 | Réponse JSON volumineuse (50+ PDL) | P2 | ✅ | Test de performance | - |
-| 100 | Exécution concurrente même bâtiment | P2 | ⚠️ | **Non géré en R** — last-write-wins | `silver_results_writer.py` |
+| 95 | Chemin ADLS inexistant | P2 | ✅ | Azure crée automatiquement le chemin | `adls_silver.py` |
+| 96 | NaN/Infinity dans JSON | P1 | ✅ | `json.dumps(..., default=str)` convertit en string | `run_algo_services.py` |
+| 97 | Réponse JSON volumineuse (50+ PDL) | P2 | ✅ | Test de performance | - |
+| 98 | Exécution concurrente même bâtiment | P2 | ⚠️ | **Non géré en R** — last-write-wins | `silver_results_writer.py` |
 
 ---
 
@@ -235,12 +235,12 @@ Ce document décrit les **113 cas de test** pour valider le code Python de préd
 
 | # | Usecase | Prio | Statut | Comportement Attendu (R) | Fichier Python |
 |---|---------|------|--------|--------------------------|----------------|
-| 101 | Parquet corrompu/vide | P1 | ✅ | `pd.read_parquet()` lève exception | `adls_silver.py` |
-| 102 | Schéma Parquet différent (colonne renommée) | P1 | ⚠️ | KeyError si colonne attendue manquante | - |
-| 103 | Caractères spéciaux dans IDs | P2 | ✅ | UTF-8 géré par Pandas | - |
-| 104 | Très gros bâtiment (20 ans, 15 PDL) | P2 | ✅ | Test de performance | - |
-| 105 | ADLS vide (aucun fichier silver) | P1 | ✅ | `ResourceNotFoundError` | `adls_silver.py` |
-| 106 | geographical_area = NULL | P2 | ⚠️ | Dépend logique pivot usage_data | `usage_data.py` |
+| 99 | Parquet corrompu/vide | P1 | ✅ | `pd.read_parquet()` lève exception | `adls_silver.py` |
+| 100 | Schéma Parquet différent (colonne renommée) | P1 | ⚠️ | KeyError si colonne attendue manquante | - |
+| 101 | Caractères spéciaux dans IDs | P2 | ✅ | UTF-8 géré par Pandas | - |
+| 102 | Très gros bâtiment (20 ans, 15 PDL) | P2 | ✅ | Test de performance | - |
+| 103 | ADLS vide (aucun fichier silver) | P1 | ✅ | `ResourceNotFoundError` | `adls_silver.py` |
+| 104 | geographical_area = NULL | P2 | ⚠️ | Dépend logique pivot usage_data | `usage_data.py` |
 
 ---
 
@@ -248,8 +248,8 @@ Ce document décrit les **113 cas de test** pour valider le code Python de préd
 
 | # | Usecase | Prio | Statut | Comportement Attendu (R) | Fichier Python |
 |---|---------|------|--------|--------------------------|----------------|
-| 107 | 2 PDL : un DJU, un moyenne | P0 | ✅ | Chaque PDL traité indépendamment | `run_algo_services.py` |
-| 108 | Un PDL cause erreur fatale | P0 | ✅ | Avec try/except : continue aux autres PDL | `run_algo_services.py` |
+| 105 | 2 PDL : un DJU, un moyenne | P0 | ✅ | Chaque PDL traité indépendamment | `run_algo_services.py` |
+| 106 | Un PDL cause erreur fatale | P0 | ✅ | Avec try/except : continue aux autres PDL | `run_algo_services.py` |
 
 ---
 
@@ -257,9 +257,9 @@ Ce document décrit les **113 cas de test** pour valider le code Python de préd
 
 | # | Usecase | Prio | Statut | Comportement Attendu (R) | Fichier Python |
 |---|---------|------|--------|--------------------------|----------------|
-| 109 | Factures existent mais hors période ref | P0 | ✅ | train.empty → `note_000` | `split_train_test_like_r()` |
-| 110 | Toutes factures hors range DJU | P1 | ✅ | Colonnes DJU toutes NA → `mask_train.sum() < 6` | `dju_model.py` |
-| 111 | Test vide (start_pred > end_pred) | P1 | ✅ | `ValueError` ou liste mois vide | `model_table.py:213` |
+| 107 | Factures existent mais hors période ref | P0 | ✅ | train.empty → `note_000` | `split_train_test_like_r()` |
+| 108 | Toutes factures hors range DJU | P1 | ✅ | Colonnes DJU toutes NA → `mask_train.sum() < 6` | `dju_model.py` |
+| 109 | Test vide (start_pred > end_pred) | P1 | ✅ | `ValueError` ou liste mois vide | `model_table.py:213` |
 
 ---
 
@@ -267,10 +267,10 @@ Ce document décrit les **113 cas de test** pour valider le code Python de préd
 
 | # | Usecase | Prio | Statut | Comportement Attendu (R) | Fichier Python |
 |---|---------|------|--------|--------------------------|----------------|
-| 112a | Prédiction 1 année | P0 | ✅ | Cas nominal | `main_test.py` |
-| 112b | Prédiction 2 années | P1 | ✅ | **Autorisé en Python** (bloqué en R par error_000) | `main_test.py` |
-| 112c | Prédiction 3+ années | P2 | ✅ | Test de robustesse/performance | `main_test.py` |
-| 112d | Décembre → Janvier (2 ans) | P1 | ✅ | 2 mois sur 2 années différentes | `main_test.py` |
+| 110 | Prédiction 1 année | P0 | ✅ | Cas nominal | `main_test.py` |
+| 111 | Prédiction 2 années | P1 | ✅ | **Autorisé en Python** (bloqué en R par error_000) | `main_test.py` |
+| 112 | Prédiction 3+ années | P2 | ✅ | Test de robustesse/performance | `main_test.py` |
+| 113 | Décembre → Janvier (2 ans) | P1 | ✅ | 2 mois sur 2 années différentes | `main_test.py` |
 
 ---
 
@@ -304,6 +304,20 @@ Ce document décrit les **113 cas de test** pour valider le code Python de préd
 
 Les cas marqués ⚠️ ne sont **pas des bugs** — ils reproduisent le comportement exact du code R qui ne valide pas ces situations. Le Python doit se comporter de la même manière.
 
+## Comparaison numérique R vs Python
+
+Pour les **cas nominaux P0** (cas #2, #3, #14, #15, #16, #110), le test doit **comparer les valeurs numériques de sortie** entre R et Python :
+
+| Métrique | Tolérance |
+|----------|-----------|
+| Prédictions (valeurs mensuelles) | **< 1%** d'écart relatif |
+| R² (coefficient de détermination) | **< 1%** d'écart |
+| RMSE (Root Mean Square Error) | **< 1%** d'écart |
+| MAE (Mean Absolute Error) | **< 1%** d'écart |
+| Détection d'outliers | **~5%** d'écart accepté (différence `supsmu` vs `lowess`) |
+
+**Méthode** : Exécuter le même jeu de données dans R et Python, puis comparer les sorties numériques. La tolérance de ~5% sur les outliers est justifiée par la différence d'algorithme de lissage (voir section ci-dessous).
+
 ## Note sur la Détection d'Outliers (supsmu vs lowess)
 
 La détection d'outliers peut présenter des **écarts mineurs** entre R et Python :
@@ -320,9 +334,11 @@ La détection d'outliers peut présenter des **écarts mineurs** entre R et Pyth
 
 - **Ancien #16** : Unités incohérentes (MWh vs kWh) — hors scope
 - **Ancien #55** : Meilleur HDD = CDD — impossible par définition
+- **Ancien #63** : Fusionné avec #60 (doublon divergence imputation)
+- **Ancien #76** : Supprimé (logique Python interne, pas fidélité R)
+- **Ancien #87** : Doublon de #76 (sans zéros < 6 obs)
+- **Ancien #99** : Doublon de #75 (égalité adj R²)
 - **Ancien #109** : Changement de fluide — hors scope
-- **Ancien #87** : Doublon de #78 (sans zéros < 6 obs)
-- **Ancien #99** : Doublon de #77 (égalité adj R²)
 
 ## Cas Ajoutés
 
@@ -345,9 +361,9 @@ Le code Python **filtre bien** les facteurs constants (std=0) dans `usage_data.p
 Avant d'exécuter les tests, s'assurer que :
 
 1. **Sentinelle 9999** : Code décommenté dans `invoices.py:28`
-2. **Try/except PDL** : Ajouté dans `run_algo_services.py` pour le cas #108
+2. **Try/except PDL** : Ajouté dans `run_algo_services.py` pour le cas #106
 
 ---
 
-*Document mis à jour le 2025-02-12*
+*Document mis à jour le 2026-02-12*
 *Basé sur l'analyse du code R `predictive_consumption_modelisation` (code_algo.R)*
