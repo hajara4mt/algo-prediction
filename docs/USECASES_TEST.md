@@ -2,7 +2,7 @@
 
 ## Objectif
 
-Ce document décrit les **107 cas de test** pour valider le code Python de prédiction de consommation énergétique. L'objectif est la **fidélité au comportement R** : le Python doit reproduire exactement le même comportement que l'algorithme R `predictive_consumption_modelisation`, y compris sur les cas limites non gérés.
+Ce document décrit les **113 cas de test** pour valider le code Python de prédiction de consommation énergétique. L'objectif est la **fidélité au comportement R** : le Python doit reproduire exactement le même comportement que l'algorithme R `predictive_consumption_modelisation`, y compris sur les cas limites non gérés.
 
 ---
 
@@ -130,7 +130,7 @@ Ce document décrit les **107 cas de test** pour valider le code Python de préd
 |---|---------|------|--------|--------------------------|----------------|
 | 41 | Période ref dans le futur | P1 | ✅ | train.empty → `note_000` | `split_train_test_like_r()` |
 | 42 | Période pred dans le passé | P2 | ✅ | Cas valide — permet comparaison avec réel | - |
-| 43 | Ref et pred se chevauchent | P1 | ⚠️ | **Non vérifié en R** — data leakage silencieux, R² gonflé | `split_train_test_like_r()` |
+| 43 | Ref et pred se chevauchent | P0 | ⚠️ | **Non vérifié en R** — data leakage silencieux, R² gonflé | `split_train_test_like_r()` |
 | 44 | Période ref très courte (3 mois) | P0 | ✅ | n=3 < 6 → `TOO_FEW_OBSERVATIONS` | `decision.py` |
 | 45 | Période ref très longue (10 ans) | P2 | ✅ | Test de performance — traitement normal | - |
 | 46 | Prédiction d'un seul mois | P1 | ✅ | Cas valide minimal | - |
@@ -161,10 +161,9 @@ Ce document décrit les **107 cas de test** pour valider le code Python de préd
 |---|---------|------|--------|--------------------------|----------------|
 | 58 | Toutes valeurs manquantes | P0 | ✅ | `notna().sum() < 3` → série retournée inchangée | `imputation.py:21` |
 | 59 | Une seule valeur non manquante | P1 | ✅ | `notna().sum() < 3` → série retournée inchangée | `imputation.py:21` |
-| 60 | 3 méthodes divergent fortement | P2 | ✅ | Moyenne pondérée = `df.mean(axis=1)` | `imputation.py:115` |
+| 60 | 3 méthodes divergent fortement → moyenne potentiellement aberrante | P2 | ✅ | Moyenne pondérée = `df.mean(axis=1)` (comportement attendu) | `imputation.py:115` |
 | 61 | Série trop courte (n < 24) | P1 | ✅ | `n <= 2 * period` → fallback interpolation linéaire | `imputation.py:70-72` |
 | 62 | Interpolation avec < 3 points non-NA | P1 | ✅ | Retourne série inchangée | `imputation.py:21` |
-| 63 | 3 méthodes divergent → moyenne aberrante | P2 | ✅ | Comportement attendu de la moyenne | `imputation.py:115` |
 
 ---
 
@@ -184,7 +183,6 @@ Ce document décrit les **107 cas de test** pour valider le code Python de préd
 | 73 | 2ème passe trouve plus d'outliers | P2 | ✅ | `iterate=2` dans le code | `outliers.py` |
 | 74 | Imputation crée pic → détecté outlier | P2 | ✅ | Comportement attendu du pipeline séquentiel | `postprocess.py` |
 | 75 | Outlier sur point déjà imputé | P2 | ✅ | Double correction possible | `postprocess.py:163-176` |
-| 76 | Borne span lowess : n=39 vs n=40 | P2 | ✅ | **Logique Python** : n<40 → span=0.6 ; n≥40 → span adaptatif (0.5-0.7) | `outliers.py:155-162` |
 
 ---
 
@@ -193,7 +191,7 @@ Ce document décrit les **107 cas de test** pour valider le code Python de préd
 | # | Usecase | Prio | Statut | Comportement Attendu (R) | Fichier Python |
 |---|---------|------|--------|--------------------------|----------------|
 | 77 | Égalité parfaite adj R² (imp vs corr) | P1 | ✅ | `s_imp >= s_cor` → **imputation gagne** en cas d'égalité | `postprocess.py:202` |
-| 78 | Sans zéros → seulement 3 obs | P1 | ⚠️ | **Non vérifié en R** — régression avec 3 obs (pas de recheck seuil 6) | `postprocess.py:190-192` |
+| 78 | Sans zéros → seulement 3 obs | P0 | ⚠️ | **Non vérifié en R** — régression avec 3 obs (pas de recheck seuil 6) | `postprocess.py:190-192` |
 | 79 | Toutes consommations = 0 | P1 | ✅ | `df_wo0` vide → `s_wo0 = -inf` → zéros conservés | `postprocess.py:187` |
 | 80 | R² raw > imputé → < 6 obs après drop NA | P2 | ⚠️ | **Non vérifié en R** — régression avec < 6 obs | `postprocess.py:124-126` |
 
@@ -209,7 +207,7 @@ Ce document décrit les **107 cas de test** pour valider le code Python de préd
 | 84 | Matrice singulière (colonnes colinéaires) | P2 | ✅ | `np.linalg.lstsq(..., rcond=None)` gère via pseudo-inverse | `dju_model.py` |
 | 85 | IC 95% plus large que prédiction | P2 | ✅ | Possible, pas de garde-fou | `dju_model.py` |
 | 86 | Prédictions partiellement NA | P1 | ✅ | `note: some months have missing predictors → NA` | `dju_model.py:322-326` |
-| 87 | Prédictions négatives | P1 | ⚠️ | **Pas de garde-fou en R** — modèle linéaire peut prédire < 0 | `dju_model.py` |
+| 87 | Prédictions négatives | P0 | ⚠️ | **Pas de garde-fou en R** — modèle linéaire peut prédire < 0 | `dju_model.py` |
 | 88 | IC lower95 < 0 | P2 | ⚠️ | **Pas de garde-fou en R** — peut être négatif | `dju_model.py` |
 | 89 | HDD et CDD tous adj R² négatif | P0 | ✅ | `return None` → fallback mean model | `dju_model.py:256-258` |
 | 90 | DJU avec NA après jointure | P1 | ✅ | Lignes exclues du fit | `dju_model.py:284-286` |
@@ -281,22 +279,22 @@ Ce document décrit les **107 cas de test** pour valider le code Python de préd
 | Catégorie | Total | P0 | P1 | P2 | ✅ | ⚠️ |
 |-----------|-------|----|----|----|----|-----|
 | Bâtiment & Structure | 8 | 2 | 5 | 1 | 7 | 1 |
-| Factures | 15 | 5 | 7 | 3 | 13 | 2 |
+| Factures | 15 | 6 | 6 | 3 | 13 | 2 |
 | Sentinelle 9999 | 5 | 1 | 2 | 2 | 5 | 0 |
 | DJU | 7 | 0 | 6 | 1 | 6 | 1 |
 | Facteurs d'usage | 5 | 0 | 4 | 1 | 4 | 1 |
-| Périodes | 8 | 1 | 4 | 3 | 5 | 3 |
+| Périodes | 8 | 2 | 3 | 3 | 5 | 3 |
 | Preprocessing | 9 | 2 | 5 | 2 | 9 | 0 |
-| Imputation | 6 | 1 | 3 | 2 | 6 | 0 |
-| Outliers | 13 | 0 | 7 | 6 | 13 | 0 |
-| Sélection Y | 4 | 0 | 3 | 1 | 2 | 2 |
-| Régression DJU | 16 | 1 | 9 | 6 | 11 | 5 |
+| Imputation | 5 | 1 | 2 | 2 | 5 | 0 |
+| Outliers | 12 | 0 | 7 | 5 | 12 | 0 |
+| Sélection Y | 4 | 1 | 2 | 1 | 2 | 2 |
+| Régression DJU | 16 | 2 | 8 | 6 | 11 | 5 |
 | Output | 4 | 0 | 2 | 2 | 3 | 1 |
 | Robustesse | 6 | 0 | 3 | 3 | 4 | 2 |
 | Multi-PDL | 2 | 2 | 0 | 0 | 2 | 0 |
 | Train/Test | 3 | 1 | 2 | 0 | 3 | 0 |
 | Multi-années | 4 | 1 | 2 | 1 | 4 | 0 |
-| **TOTAL** | **115** | **17** | **64** | **34** | **97** | **18** |
+| **TOTAL** | **113** | **21** | **59** | **33** | **95** | **18** |
 
 ---
 
@@ -316,7 +314,7 @@ La détection d'outliers peut présenter des **écarts mineurs** entre R et Pyth
 | Choix du span | **Automatique** (adaptatif interne) | **Manuel** : span=0.6 pour n<40, adaptatif sinon |
 | Comportement | Smooth plus "plat" sur petites séries | Calibré pour matcher le comportement R |
 
-**Conséquence** : ~5% des cas peuvent avoir une détection d'outliers légèrement différente. Le cas #76 teste la **logique interne Python** (bornes de span), pas la fidélité R.
+**Conséquence** : ~5% des cas peuvent avoir une détection d'outliers légèrement différente.
 
 ## Cas Retirés (de la numérotation originale)
 
@@ -334,7 +332,6 @@ La détection d'outliers peut présenter des **écarts mineurs** entre R et Pyth
 | 22 | NaN explicite dans colonne value |
 | 23 | Division par zéro dans prorata (conso=0, durée=0) |
 | 35 | DJU partiels (certains seuils manquants) |
-| 76 | Bornes spans lowess n=39 vs n=40 (**logique Python, pas R**) |
 
 ## Correction Cas #38 (ex-29)
 
