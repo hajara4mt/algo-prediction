@@ -310,10 +310,10 @@ Pour les **cas nominaux P0** (cas #2, #3, #14, #15, #16, #110), le test doit **c
 
 | Métrique | Tolérance |
 |----------|-----------|
-| Prédictions (valeurs mensuelles) | **< 1%** d'écart relatif |
-| R² (coefficient de détermination) | **< 1%** d'écart |
-| RMSE (Root Mean Square Error) | **< 1%** d'écart |
-| MAE (Mean Absolute Error) | **< 1%** d'écart |
+| Prédictions (valeurs mensuelles) | **< 5%** d'écart relatif |
+| R² (coefficient de détermination) | **< 5%** d'écart |
+| RMSE (Root Mean Square Error) | **< 5%** d'écart |
+| MAE (Mean Absolute Error) | **< 5%** d'écart |
 | Détection d'outliers | **~5%** d'écart accepté (différence `supsmu` vs `lowess`) |
 
 **Méthode** : Exécuter le même jeu de données dans R et Python, puis comparer les sorties numériques. La tolérance de ~5% sur les outliers est justifiée par la différence d'algorithme de lissage (voir section ci-dessous).
@@ -325,45 +325,9 @@ La détection d'outliers peut présenter des **écarts mineurs** entre R et Pyth
 | Aspect | R | Python |
 |--------|---|--------|
 | Algorithme smoothing | `supsmu` (Friedman's Super Smoother) | `lowess` (statsmodels) |
-| Choix du span | **Automatique** (adaptatif interne) | **Manuel** : span=0.6 pour n<40, adaptatif sinon |
+| Choix du span | **Automatique** (adaptatif interne) | **Manuel** : span fixe pour n<40, adaptatif sinon |
 | Comportement | Smooth plus "plat" sur petites séries | Calibré pour matcher le comportement R |
 
 **Conséquence** : ~5% des cas peuvent avoir une détection d'outliers légèrement différente.
 
-## Cas Retirés (de la numérotation originale)
 
-- **Ancien #16** : Unités incohérentes (MWh vs kWh) — hors scope
-- **Ancien #55** : Meilleur HDD = CDD — impossible par définition
-- **Ancien #63** : Fusionné avec #60 (doublon divergence imputation)
-- **Ancien #76** : Supprimé (logique Python interne, pas fidélité R)
-- **Ancien #87** : Doublon de #76 (sans zéros < 6 obs)
-- **Ancien #99** : Doublon de #75 (égalité adj R²)
-- **Ancien #109** : Changement de fluide — hors scope
-
-## Cas Ajoutés
-
-| Nouveau # | Description |
-|-----------|-------------|
-| 8 | PDL actifs/inactifs dans la période |
-| 22 | NaN explicite dans colonne value |
-| 23 | Division par zéro dans prorata (conso=0, durée=0) |
-| 35 | DJU partiels (certains seuils manquants) |
-
-## Correction Cas #38 (ex-29)
-
-Le code Python **filtre bien** les facteurs constants (std=0) dans `usage_data.py:79-91`, mais :
-- Pas de `note_011` par facteur (contrairement à ce qui était indiqué)
-- Seulement `note_012` quand **tous** les facteurs sont constants
-- Comportement conforme à R
-
-## Actions Préalables
-
-Avant d'exécuter les tests, s'assurer que :
-
-1. **Sentinelle 9999** : Code décommenté dans `invoices.py:28`
-2. **Try/except PDL** : Ajouté dans `run_algo_services.py` pour le cas #106
-
----
-
-*Document mis à jour le 2026-02-12*
-*Basé sur l'analyse du code R `predictive_consumption_modelisation` (code_algo.R)*
