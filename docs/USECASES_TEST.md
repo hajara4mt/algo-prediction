@@ -246,10 +246,10 @@ Ce document décrit les **104 cas de test** pour valider le code Python de préd
 
 | # | Usecase | Statut | Comportement Attendu (R) | Fichier Python |
 |---|---------|--------|--------------------------|----------------|
-| 73a | Prédiction 1 année | ✅ | Cas nominal | - |
-| 73b | Prédiction 2 années | ✅ | **Autorisé en Python** (bloqué en R par error_000) | - |
-| 73c | Prédiction 3+ années | ✅ | Test de robustesse/performance | - |
-| 73d | Décembre → Janvier (2 ans) | ✅ | 2 mois sur 2 années différentes | - |
+| 73a | Prédiction 1 année | ✅ | Cas nominal | 'main_test.py' |
+| 73b | Prédiction 2 années | ✅ | **Autorisé en Python** (bloqué en R par error_000) | 'main_test.py' |
+| 73c | Prédiction 3+ années | ✅ | Test de robustesse/performance | 'main_test.py' |
+| 73d | Décembre → Janvier (2 ans) | ✅ | 2 mois sur 2 années différentes | 'main_test.py' |
 
 ---
 
