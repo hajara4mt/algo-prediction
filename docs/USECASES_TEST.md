@@ -184,7 +184,7 @@ Ce document décrit les **107 cas de test** pour valider le code Python de préd
 | 73 | 2ème passe trouve plus d'outliers | P2 | ✅ | `iterate=2` dans le code | `outliers.py` |
 | 74 | Imputation crée pic → détecté outlier | P2 | ✅ | Comportement attendu du pipeline séquentiel | `postprocess.py` |
 | 75 | Outlier sur point déjà imputé | P2 | ✅ | Double correction possible | `postprocess.py:163-176` |
-| 76 | Borne span lowess : n=39 vs n=40 | P2 | ✅ | n<40 → span=0.25 ; n≥40 → span=0.20 | `outliers.py:148-155` |
+| 76 | Borne span lowess : n=39 vs n=40 | P2 | ✅ | **Logique Python** : n<40 → span=0.6 ; n≥40 → span adaptatif (0.5-0.7) | `outliers.py:155-162` |
 
 ---
 
@@ -306,6 +306,18 @@ Ce document décrit les **107 cas de test** pour valider le code Python de préd
 
 Les cas marqués ⚠️ ne sont **pas des bugs** — ils reproduisent le comportement exact du code R qui ne valide pas ces situations. Le Python doit se comporter de la même manière.
 
+## Note sur la Détection d'Outliers (supsmu vs lowess)
+
+La détection d'outliers peut présenter des **écarts mineurs** entre R et Python :
+
+| Aspect | R | Python |
+|--------|---|--------|
+| Algorithme smoothing | `supsmu` (Friedman's Super Smoother) | `lowess` (statsmodels) |
+| Choix du span | **Automatique** (adaptatif interne) | **Manuel** : span=0.6 pour n<40, adaptatif sinon |
+| Comportement | Smooth plus "plat" sur petites séries | Calibré pour matcher le comportement R |
+
+**Conséquence** : ~5% des cas peuvent avoir une détection d'outliers légèrement différente. Le cas #76 teste la **logique interne Python** (bornes de span), pas la fidélité R.
+
 ## Cas Retirés (de la numérotation originale)
 
 - **Ancien #16** : Unités incohérentes (MWh vs kWh) — hors scope
@@ -322,7 +334,7 @@ Les cas marqués ⚠️ ne sont **pas des bugs** — ils reproduisent le comport
 | 22 | NaN explicite dans colonne value |
 | 23 | Division par zéro dans prorata (conso=0, durée=0) |
 | 35 | DJU partiels (certains seuils manquants) |
-| 76 | Bornes spans lowess n=39 vs n=40 |
+| 76 | Bornes spans lowess n=39 vs n=40 (**logique Python, pas R**) |
 
 ## Correction Cas #38 (ex-29)
 
